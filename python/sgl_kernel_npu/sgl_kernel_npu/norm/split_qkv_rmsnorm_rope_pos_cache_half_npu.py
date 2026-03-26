@@ -8,6 +8,14 @@ package when you already have sin/cos tensors of shape [B, rope_dim].
 import torch
 import triton
 import triton.language as tl
+try:
+    import triton.language.extra.cann.extension as al
+    tr_extract_slice = al.extract_slice
+    tr_insert_slice = al.insert_slice
+except ImportError:
+    tr_extract_slice = tl.extract_slice
+    tr_insert_slice = tr_insert_slice
+
 from sgl_kernel_npu.utils.triton_utils import get_device_properties
 
 
@@ -107,14 +115,14 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
         else:
             y_base = y
 
-        y_rot = tl.extract_slice(
+        y_rot = tr_extract_slice(
             y_base, offsets=(0, 0), sizes=(q_block_n, rope_dim), strides=(1, 1)
         )
         y_rot_f = y_rot.to(tl.float32)
-        x1 = tl.extract_slice(
+        x1 = tr_extract_slice(
             y_rot_f, offsets=(0, 0), sizes=(q_block_n, half_rope_dim), strides=(1, 1)
         )
-        x2 = tl.extract_slice(
+        x2 = tr_extract_slice(
             y_rot_f,
             offsets=(0, half_rope_dim),
             sizes=(q_block_n, half_rope_dim),
@@ -125,10 +133,10 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
         ro1 = o1.to(tl.bfloat16)
         ro2 = o2.to(tl.bfloat16)
         roped = tl.zeros((q_block_n, rope_dim), dtype=tl.bfloat16)
-        roped = tl.insert_slice(
+        roped = tr_insert_slice(
             roped, ro1, offsets=(0, 0), sizes=(q_block_n, half_rope_dim), strides=(1, 1)
         )
-        roped = tl.insert_slice(
+        roped = tr_insert_slice(
             roped,
             ro2,
             offsets=(0, half_rope_dim),
@@ -139,7 +147,7 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
             y_out = y_base
         else:
             y_out = y_base.to(tl.bfloat16)
-        y_out = tl.insert_slice(
+        y_out = tr_insert_slice(
             y_out, roped, offsets=(0, 0), sizes=(q_block_n, rope_dim), strides=(1, 1)
         )
         tl.store(
@@ -171,14 +179,14 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
         else:
             y_base = y
 
-        y_rot = tl.extract_slice(
+        y_rot = tr_extract_slice(
             y_base, offsets=(0, 0), sizes=(k_block_n, rope_dim), strides=(1, 1)
         )
         y_rot_f = y_rot.to(tl.float32)
-        x1 = tl.extract_slice(
+        x1 = tr_extract_slice(
             y_rot_f, offsets=(0, 0), sizes=(k_block_n, half_rope_dim), strides=(1, 1)
         )
-        x2 = tl.extract_slice(
+        x2 = tr_extract_slice(
             y_rot_f,
             offsets=(0, half_rope_dim),
             sizes=(k_block_n, half_rope_dim),
@@ -189,10 +197,10 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
         ro1 = o1.to(tl.bfloat16)
         ro2 = o2.to(tl.bfloat16)
         roped = tl.zeros((k_block_n, rope_dim), dtype=tl.bfloat16)
-        roped = tl.insert_slice(
+        roped = tr_insert_slice(
             roped, ro1, offsets=(0, 0), sizes=(k_block_n, half_rope_dim), strides=(1, 1)
         )
-        roped = tl.insert_slice(
+        roped = tr_insert_slice(
             roped,
             ro2,
             offsets=(0, half_rope_dim),
@@ -203,7 +211,7 @@ def split_qkv_rmsnorm_rope_half_pos_cache_kernel(
             y_out = y_base
         else:
             y_out = y_base.to(tl.bfloat16)
-        y_out = tl.insert_slice(
+        y_out = tr_insert_slice(
             y_out, roped, offsets=(0, 0), sizes=(k_block_n, rope_dim), strides=(1, 1)
         )
         tl.store(
